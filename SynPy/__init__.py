@@ -36,6 +36,7 @@ NUMBA_PARALLEL = False
 MAX_BUFFER = 10  # Amount of frames the audio stream can fall behind
 SHOW_VIDEO = True
 SHOW_PLOT = False
+FOURIER_TRANSFORM_WAVE = True
 
 _MAX_USED_FREQ = min(MAX_FREQ, int(RATE/2))
 _HILBERT_RESOLUTION = 2 ** HILBERT_PRECISION
@@ -187,12 +188,17 @@ def synesthesia(path):
             stream.write(wave_to_data(wave))
 
             if SHOW_VIDEO:
-                resized_prepared = cv2.cvtColor(cv2.resize(prepared, frame.shape[1::-1]),
-                                                cv2.COLOR_GRAY2RGB)
+                resized_prepared = cv2.cvtColor(
+                    cv2.resize(prepared, frame.shape[1::-1]),  # y, x = frame.shape[1::-1]
+                    cv2.COLOR_GRAY2RGB
+                )
                 concat = cv2.vconcat([frame, resized_prepared])
 
                 if SHOW_PLOT:
-                    plot = cv2.cvtColor(cv2.resize(plot_to_ndarray(np.fft.rfft(wave).real), concat.shape[1::-1]),
+                    if FOURIER_TRANSFORM_WAVE:
+                        wave = np.fft.rfft(wave).real
+
+                    plot = cv2.cvtColor(cv2.resize(plot_to_ndarray(wave), concat.shape[1::-1]),
                                         cv2.COLOR_RGBA2RGB)
                     cv2.imshow("Video", cv2.hconcat([concat, plot]))
                 else:
@@ -203,13 +209,15 @@ def synesthesia(path):
                     break
 
             elif SHOW_PLOT:
+                if FOURIER_TRANSFORM_WAVE:
+                    wave = np.fft.rfft(wave).real
                 plt.clf()
                 plt.plot(wave)
                 plt.pause(0.0001)
 
         if len(buffer) > MAX_BUFFER:
-            halve_buffer = int(MAX_BUFFER / 2)
-            # TODO drop half of buffer
+            buffer = buffer[int(MAX_BUFFER / 2):]
+
     cv2.destroyAllWindows()
     video.release()
     stream.stop_stream()
@@ -219,10 +227,11 @@ def synesthesia(path):
 
 def main(argv):
     def usage():
-        print("Usage: " + sys.argv[0] + " [-i <input path> -b <buffer size>")
+        print("Usage: " + sys.argv[0] + " -i <input path>")
     input_path = None
+
     try:
-        opts, args = getopt.getopt(argv[1:], "hi:", ["help","inpath="])
+        opts, args = getopt.getopt(argv[1:], "hi:", ["help", "inpath="])
     except getopt.GetoptError as e:
         usage()
         sys.exit(e)
